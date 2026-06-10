@@ -52,8 +52,24 @@
   }
   header .tagline { color: var(--text); font-size: 15px; margin: 0 0 10px; }
   header .concept {
+    max-width: 900px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 11px;
+  }
+  header .concept-map {
+    display: flex; flex-wrap: wrap; gap: 8px 9px;
+    align-items: center; justify-content: center;
+    font-size: 13px;
+  }
+  header .concept-map b { color: var(--text); margin-right: 2px; }
+  header .kv {
+    font-size: 12px; padding: 3px 11px; border-radius: 20px;
+    border: 1px solid var(--border); background: rgba(110,118,129,0.10);
+    color: var(--text); white-space: nowrap;
+  }
+  header .kv i { color: var(--muted); font-style: normal; }
+  header .concept-agents {
     color: var(--muted); font-size: 13px; line-height: 1.6;
-    max-width: 880px; margin: 0 auto;
+    margin: 0; text-align: center;
   }
   header .concept code {
     color: #d2a8ff; background: rgba(110,118,129,0.15);
@@ -241,11 +257,19 @@
   <header>
     <h1>PR 컨베이어 벨트 · 에이전트 오케스트레이터</h1>
     <p class="tagline">자율 코딩 에이전트를 위한 GitHub 중심 컨베이어 벨트</p>
-    <p class="concept">
-      <b>GitHub이 영속 상태 머신입니다</b> — 이슈=빌드 큐, PR=리뷰 큐, <code>라벨</code>=상태, CI=품질 게이트.
-      에이전트(<code>claude</code>/<code>codex</code>)는 <b>헤드리스 모드</b>의 stateless 워커로,
-      격리된 <code>git worktree</code> 안에서 한 번에 하나의 작업만 수행합니다.
-    </p>
+    <div class="concept">
+      <div class="concept-map">
+        <b>GitHub = 영속 상태 머신</b>
+        <span class="kv">이슈 <i>→</i> 빌드 큐</span>
+        <span class="kv">PR <i>→</i> 리뷰 큐</span>
+        <span class="kv">라벨 <i>→</i> 상태</span>
+        <span class="kv">CI <i>→</i> 품질 게이트</span>
+      </div>
+      <p class="concept-agents">
+        에이전트(<code>claude</code> / <code>codex</code>)는 <b>헤드리스 모드</b>의 stateless 워커로,
+        격리된 <code>git worktree</code> 안에서 한 번에 하나의 작업만 수행합니다.
+      </p>
+    </div>
   </header>
 
   <div class="stage">
