@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PR 컨베이어 벨트 — 에이전트 오케스트레이터</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --belt: #21262d;
+    --c-design: #8b949e;
+    --c-planner: #a371f7;
+    --c-coder: #39c5cf;
+    --c-review: #e3b341;
+    --c-baby: #f0883e;
+    --c-merge: #3fb950;
+    --reject: #f85149;
+    --approve: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+                 "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 24px 40px;
+  }
+
+  /* ---------- Header ---------- */
+  header { text-align: center; max-width: 1180px; margin-bottom: 22px; }
+  header h1 {
+    margin: 0 0 8px;
+    font-size: 30px;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #a371f7, #39c5cf, #3fb950);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  header .tagline { color: var(--text); font-size: 15px; margin: 0 0 10px; }
+  header .concept {
+    color: var(--muted); font-size: 13px; line-height: 1.6;
+    max-width: 880px; margin: 0 auto;
+  }
+  header .concept code {
+    color: #d2a8ff; background: rgba(110,118,129,0.15);
+    padding: 1px 6px; border-radius: 5px; font-size: 12px;
+  }
+
+  .stage { width: 100%; max-width: 1180px; }
+
+  /* ---------- Pipeline ---------- */
+  .pipeline {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 30px 26px 22px;
+    margin-bottom: 18px;
+  }
+  .stations {
+    position: relative;
+    display: flex;
+    gap: 14px;
+    z-index: 2;
+  }
+  .station {
+    flex: 1 1 0;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 10px 16px;
+    text-align: center;
+    position: relative;
+    transition: border-color .3s, box-shadow .3s, transform .3s;
+  }
+  .station .icon {
+    width: 40px; height: 40px; margin: 0 auto 8px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    transition: transform .3s;
+  }
+  .station .name { font-size: 14px; font-weight: 650; }
+  .station .sub { font-size: 11px; color: var(--muted); margin-top: 3px; min-height: 14px; }
+
+  .station.active {
+    border-color: var(--scol);
+    box-shadow: 0 0 0 1px var(--scol), 0 0 26px -4px var(--scol);
+    transform: translateY(-3px);
+  }
+  .station.active .icon {
+    transform: scale(1.12);
+    box-shadow: 0 0 18px -2px var(--scol);
+    border-color: var(--scol);
+  }
+  .station.active .name { color: var(--scol); }
+
+  /* reviewer sub-badges */
+  .reviewers {
+    display: flex; gap: 6px; justify-content: center; margin-top: 9px;
+    min-height: 22px;
+  }
+  .rv {
+    font-size: 10px; padding: 2px 7px; border-radius: 20px;
+    border: 1px solid var(--border); color: var(--muted);
+    background: rgba(255,255,255,0.03);
+    display: flex; align-items: center; gap: 3px;
+    transition: all .3s;
+  }
+  .rv.pending { animation: pulse 1.1s ease-in-out infinite; border-color: var(--c-review); color: var(--c-review); }
+  .rv.approve { border-color: var(--approve); color: var(--approve); background: rgba(63,185,80,0.12); }
+  .rv.reject  { border-color: var(--reject); color: var(--reject); background: rgba(248,81,73,0.12); }
+  @keyframes pulse { 0%,100%{opacity:.45} 50%{opacity:1} }
+
+  /* return arrow overlay (changes-requested loop) */
+  .loopSvg { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; overflow: visible; }
+  .loopPath {
+    fill: none; stroke: var(--c-baby); stroke-width: 2;
+    stroke-dasharray: 6 6; opacity: .28; transition: opacity .3s;
+  }
+  .loopPath.hot { opacity: 1; animation: dash 0.6s linear infinite; filter: drop-shadow(0 0 6px var(--c-baby)); }
+  @keyframes dash { to { stroke-dashoffset: -24; } }
+  .loopLabel { fill: var(--c-baby); font-size: 11px; font-weight: 600; opacity: .5; transition: opacity .3s; }
+  .loopLabel.hot { opacity: 1; }
+
+  /* ---------- Belt ---------- */
+  .beltWrap { position: relative; height: 92px; margin-top: 24px; }
+  .belt {
+    position: absolute; left: 0; right: 0; top: 46px; height: 26px;
+    background:
+      repeating-linear-gradient(90deg,
+        var(--belt) 0, var(--belt) 18px,
+        #2b3340 18px, #2b3340 22px);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background-size: 40px 100%;
+    overflow: hidden;
+  }
+  .belt.run { animation: beltmove 1.4s linear infinite; }
+  @keyframes beltmove { to { background-position: 40px 0; } }
+
+  .card {
+    position: absolute; top: 6px; left: 0;
+    width: 132px;
+    background: linear-gradient(180deg, #1f2630, #161b22);
+    border: 1px solid var(--cardcol, var(--border));
+    border-radius: 10px;
+    padding: 8px 10px;
+    box-shadow: 0 8px 22px -8px rgba(0,0,0,.8), 0 0 18px -6px var(--cardcol, transparent);
+    transition: left .7s cubic-bezier(.65,.05,.36,1), border-color .4s, box-shadow .4s;
+    z-index: 4;
+  }
+  .card .ctitle { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
+  .card .cdot { width: 8px; height: 8px; border-radius: 50%; background: var(--cardcol, var(--muted)); flex: none; }
+  .card .clabel {
+    margin-top: 6px; font-size: 10px; padding: 2px 7px; border-radius: 20px;
+    display: inline-block; font-weight: 600;
+    border: 1px solid var(--lblcol, var(--border));
+    color: var(--lblcol, var(--muted));
+    background: var(--lblbg, transparent);
+  }
+  .card.done { animation: pop .5s ease; }
+  @keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.12)} 100%{transform:scale(1)} }
+
+  /* ---------- State machine panel ---------- */
+  .sm {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px 18px; margin-bottom: 18px;
+  }
+  .sm h2 { margin: 0 0 12px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .3px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pill {
+    font-size: 12px; padding: 5px 11px; border-radius: 20px;
+    border: 1px solid var(--pc); color: var(--pc);
+    background: color-mix(in srgb, var(--pc) 8%, transparent);
+    opacity: .4; transition: all .3s; white-space: nowrap;
+  }
+  .pill.active { opacity: 1; box-shadow: 0 0 16px -3px var(--pc); transform: translateY(-1px); font-weight: 650; }
+  .pill.passed { opacity: .85; }
+  .arrow { color: var(--muted); font-size: 12px; opacity: .5; }
+
+  /* ---------- Caption ---------- */
+  .caption {
+    background: linear-gradient(180deg, #141a22, #11161d);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--capcol, var(--border));
+    border-radius: 12px;
+    padding: 16px 20px;
+    min-height: 70px;
+    display: flex; align-items: center; gap: 14px;
+    transition: border-color .3s;
+  }
+  .caption .step {
+    font-size: 11px; color: var(--muted); font-weight: 700;
+    border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+    flex: none; min-width: 54px; text-align: center;
+  }
+  .caption .ctext { font-size: 16px; line-height: 1.5; }
+  .caption .chl { color: var(--capcol, var(--text)); font-weight: 700; }
+
+  /* ---------- Controls ---------- */
+  .controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 18px; justify-content: center;
+  }
+  .btn {
+    background: var(--bg2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 9px;
+    padding: 9px 16px; font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: background .2s, border-color .2s, transform .1s;
+  }
+  .btn:hover { background: #1f2730; border-color: #484f58; }
+  .btn:active { transform: scale(.96); }
+  .btn.primary { background: #238636; border-color: #2ea043; }
+  .btn.primary:hover { background: #2ea043; }
+  .speed { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-left: 6px; }
+  .speed input { accent-color: #a371f7; }
+  .legend { color: var(--muted); font-size: 12px; text-align: center; margin-top: 14px; }
+  .legend b { color: var(--c-baby); }
+</style>
+</head>
+<body>
+
+  <header>
+    <h1>PR 컨베이어 벨트 · 에이전트 오케스트레이터</h1>
+    <p class="tagline">자율 코딩 에이전트를 위한 GitHub 중심 컨베이어 벨트</p>
+    <p class="concept">
+      <b>GitHub이 영속 상태 머신입니다</b> — 이슈=빌드 큐, PR=리뷰 큐, <code>라벨</code>=상태, CI=품질 게이트.
+      에이전트(<code>claude</code>/<code>codex</code>)는 <b>헤드리스 모드</b>의 stateless 워커로,
+      격리된 <code>git worktree</code> 안에서 한 번에 하나의 작업만 수행합니다.
+    </p>
+  </header>
+
+  <div class="stage">
+    <!-- Pipeline -->
+    <div class="pipeline">
+      <svg class="loopSvg" id="loopSvg">
+        <path class="loopPath" id="loopPath" d=""></path>
+        <text class="loopLabel" id="loopLabel" text-anchor="middle">agent:changes-requested</text>
+      </svg>
+
+      <div class="stations" id="stations"></div>
+
+      <div class="beltWrap">
+        <div class="belt" id="belt"></div>
+        <div class="card" id="card">
+          <div class="ctitle"><span class="cdot"></span><span id="cardTitle">대기 중</span></div>
+          <div class="clabel" id="cardLabel">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- State machine -->
+    <div class="sm">
+      <h2>GITHUB 라벨 상태 머신</h2>
+      <div class="pills" id="pills"></div>
+    </div>
+
+    <!-- Caption -->
+    <div class="caption" id="caption">
+      <div class="step" id="capStep">0 / 0</div>
+      <div class="ctext" id="capText">▶ 재생을 눌러 파이프라인을 시작하세요.</div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn primary" id="playBtn">▶ 재생</button>
+      <button class="btn" id="nextBtn">⏭ 다음 단계</button>
+      <button class="btn" id="resetBtn">↺ 리셋</button>
+      <div class="speed">
+        속도
+        <input type="range" id="speed" min="600" max="2800" value="1600" step="100">
+      </div>
+    </div>
+    <div class="legend">
+      한 개의 작업 카드가 벨트를 따라 흐릅니다. 리뷰에서 <b>변경 요청(changes-requested)</b>이 나오면
+      카드가 <b>Babysitter로 되돌아갔다가</b> 다시 리뷰로 합류합니다 — 이 프로젝트의 핵심 루프입니다.
+    </div>
+  </div>
+
+<script>
+  // ---------- Pipeline stations ----------
+  const STAGES = [
+    { id:'design',     name:'Design doc',  sub:'OVERVIEW.md',     icon:'📄', col:'--c-design'  },
+    { id:'planner',    name:'Planner',     sub:'이슈로 분해',      icon:'🧭', col:'--c-planner' },
+    { id:'coder',      name:'Coder',       sub:'구현·테스트·PR',   icon:'⚙️', col:'--c-coder'   },
+    { id:'review',     name:'Reviewers',   sub:'Claude + Codex',   icon:'🔍', col:'--c-review'  },
+    { id:'babysitter', name:'Babysitter',  sub:'PR 브랜치 패치',   icon:'🩹', col:'--c-baby'    },
+    { id:'merge',      name:'Merge gate',  sub:'squash-merge',     icon:'🚦', col:'--c-merge'   },
+  ];
+  const stageIndex = Object.fromEntries(STAGES.map((s,i)=>[s.id,i]));
+
+  // ---------- Label state machine ----------
+  const LABELS = [
+    { id:'ready',              text:'agent:ready',              col:'#3fb950' },
+    { id:'in-progress',        text:'agent:in-progress',        col:'#d29922' },
+    { id:'pr-open',            text:'agent:pr-open',            col:'#1f6feb' },
+    { id:'review-needed',      text:'agent:review-needed',      col:'#e3b341' },
+    { id:'changes-requested',  text:'agent:changes-requested',  col:'#f85149' },
+    { id:'patching',           text:'agent:patching',           col:'#f0883e' },
+    { id:'merge-ready',        text:'agent:merge-ready',        col:'#a371f7' },
+    { id:'done',               text:'agent:done',               col:'#3fb950' },
+  ];
+  const labelById = Object.fromEntries(LABELS.map(l=>[l.id,l]));
+  const labelOrder = LABELS.map(l=>l.id);
+
+  // ---------- Build the step script for one cycle ----------
+  function buildSteps(prNum, withDetour) {
+    const S = [];
+    S.push({ stage:'design', label:null, kind:'doc', rev:null,
+      cap:'설계 문서(OVERVIEW.md)가 컨베이어 벨트의 <b>원천</b>입니다 — 사람이 작성하는 단 하나의 진실.' });
+    S.push({ stage:'planner', label:'ready', kind:'issue', rev:null,
+      cap:'<b>Planner</b>가 설계 문서를 작은 베이비스텝 <b>이슈</b>들로 분해합니다.' });
+    S.push({ stage:'coder', label:'in-progress', kind:'issue', rev:null,
+      cap:'<b>Coder</b>가 이슈 하나를 잡아 <b>격리된 worktree</b>에서 구현합니다.' });
+    S.push({ stage:'coder', label:'pr-open', kind:'pr', rev:null,
+      cap:'테스트가 통과하면 <b>PR을 엽니다</b>. 한 이슈 → 하나의 작은 PR.' });
+    S.push({ stage:'review', label:'review-needed', kind:'pr', rev:'pending',
+      cap:'PR이 리뷰 큐에 진입. <b>Claude</b>와 <b>Codex</b> 두 리뷰어가 <b>읽기 전용</b>으로 검토합니다.' });
+    if (withDetour) {
+      S.push({ stage:'review', label:'changes-requested', kind:'pr', rev:'reject', detour:true,
+        cap:'<b>변경 요청!</b> 한 리뷰어가 수정을 요구 → 카드가 <b>Babysitter로 되돌아갑니다</b>.' });
+      S.push({ stage:'babysitter', label:'patching', kind:'pr', rev:null,
+        cap:'<b>Babysitter</b>가 <b>PR 브랜치만</b> 패치합니다. main은 절대 건드리지 않습니다.' });
+      S.push({ stage:'review', label:'review-needed', kind:'pr', rev:'pending',
+        cap:'패치 완료 → 다시 <b>리뷰 큐</b>로 합류. 루프가 닫혔습니다.' });
+    }
+    S.push({ stage:'review', label:'merge-ready', kind:'pr', rev:'approve',
+      cap:'두 리뷰어 모두 <b>승인</b>! 라벨이 <b>merge-ready</b>로 전이됩니다.' });
+    S.push({ stage:'merge', label:'merge-ready', kind:'pr', rev:null,
+      cap:'결정론적 <b>게이트</b>: mergeable + CI green + 크기 제한 + 양쪽 승인. 에이전트는 "감"으로 머지하지 않습니다.' });
+    S.push({ stage:'merge', label:'done', kind:'pr', rev:null, done:true,
+      cap:'<b>squash-merge 완료</b>, 이슈 종료. 벨트는 다음 작업으로 계속 이어집니다.' });
+    return S.map(s => ({ ...s, prNum }));
+  }
+
+  // ---------- Render static UI ----------
+  const stationsEl = document.getElementById('stations');
+  const stationEls = {};
+  STAGES.forEach(s => {
+    const d = document.createElement('div');
+    d.className = 'station';
+    d.style.setProperty('--scol', `var(${s.col})`);
+    d.innerHTML = `
+      <div class="icon">${s.icon}</div>
+      <div class="name">${s.name}</div>
+      <div class="sub">${s.sub}</div>
+      ${s.id==='review' ? `<div class="reviewers" id="rvbox">
+          <span class="rv" id="rvClaude">Claude</span>
+          <span class="rv" id="rvCodex">Codex</span>
+        </div>` : ``}
+    `;
+    stationsEl.appendChild(d);
+    stationEls[s.id] = d;
+  });
+
+  const pillsEl = document.getElementById('pills');
+  const pillEls = {};
+  LABELS.forEach((l, i) => {
+    if (i > 0) {
+      const a = document.createElement('span');
+      a.className = 'arrow';
+      a.textContent = (l.id === 'patching' || l.id === 'merge-ready') ? '⟲' : '→';
+      pillsEl.appendChild(a);
+    }
+    const p = document.createElement('span');
+    p.className = 'pill';
+    p.style.setProperty('--pc', l.col);
+    p.textContent = l.text;
+    pillsEl.appendChild(p);
+    pillEls[l.id] = p;
+  });
+
+  // ---------- Element refs ----------
+  const card = document.getElementById('card');
+  const cardTitle = document.getElementById('cardTitle');
+  const cardLabel = document.getElementById('cardLabel');
+  const belt = document.getElementById('belt');
+  const capText = document.getElementById('capText');
+  const capStep = document.getElementById('capStep');
+  const caption = document.getElementById('caption');
+  const rvClaude = document.getElementById('rvClaude');
+  const rvCodex = document.getElementById('rvCodex');
+  const loopPath = document.getElementById('loopPath');
+  const loopLabel = document.getElementById('loopLabel');
+  const loopSvg = document.getElementById('loopSvg');
+
+  // ---------- Geometry (card target + return arrow) ----------
+  function stageCenter(id) {
+    const beltRect = belt.getBoundingClientRect();
+    const r = stationEls[id].getBoundingClientRect();
+    return (r.left - beltRect.left) + r.width / 2;
+  }
+  function layout() {
+    // park card under current stage
+    moveCardTo(state.steps[state.i]?.stage || 'design', false);
+    // return-arrow path: arcs over the top from Reviewers back to Babysitter
+    const pipe = document.querySelector('.pipeline').getBoundingClientRect();
+    const rv = stationEls['review'].getBoundingClientRect();
+    const bb = stationEls['babysitter'].getBoundingClientRect();
+    const x1 = rv.left - pipe.left + rv.width/2;
+    const x2 = bb.left - pipe.left + bb.width/2;
+    const yTop = rv.top - pipe.top;          // top edge of station row
+    const arc = yTop - 30;                    // arc height above stations
+    loopSvg.setAttribute('width', pipe.width);
+    loopSvg.setAttribute('height', pipe.height);
+    loopPath.setAttribute('d', `M ${x1} ${yTop} C ${x1} ${arc}, ${x2} ${arc}, ${x2} ${yTop}`);
+    loopLabel.setAttribute('x', (x1 + x2) / 2);
+    loopLabel.setAttribute('y', arc - 6);
+  }
+  function moveCardTo(stageId, animate) {
+    if (!animate) {
+      const prev = card.style.transition;
+      card.style.transition = 'none';
+      card.style.left = (stageCenter(stageId) - card.offsetWidth/2) + 'px';
+      void card.offsetWidth;
+      card.style.transition = prev;
+    } else {
+      card.style.left = (stageCenter(stageId) - card.offsetWidth/2) + 'px';
+    }
+  }
+
+  // ---------- Animation state ----------
+  const state = { steps: [], i: 0, playing: false, timer: null, pr: 41, detour: true };
+
+  function resetCycle(rebuild) {
+    if (rebuild) {
+      state.steps = buildSteps(state.pr, state.detour);
+    }
+    state.i = 0;
+    applyStep(0, false);
+  }
+
+  function applyStep(i, animate) {
+    const step = state.steps[i];
+    if (!step) return;
+
+    // stations
+    STAGES.forEach(s => stationEls[s.id].classList.toggle('active', s.id === step.stage));
+
+    // card
+    const stg = STAGES[stageIndex[step.stage]];
+    card.style.setProperty('--cardcol', `var(${stg.col})`);
+    const kindTxt = step.kind === 'doc' ? 'OVERVIEW.md'
+                  : step.kind === 'issue' ? `이슈 #${step.prNum}` : `PR #${step.prNum}`;
+    cardTitle.textContent = kindTxt;
+    if (step.label) {
+      const l = labelById[step.label];
+      cardLabel.textContent = l.text;
+      cardLabel.style.setProperty('--lblcol', l.col);
+      cardLabel.style.setProperty('--lblbg', `color-mix(in srgb, ${l.col} 14%, transparent)`);
+    } else {
+      cardLabel.textContent = '—';
+      cardLabel.style.setProperty('--lblcol', 'var(--muted)');
+      cardLabel.style.setProperty('--lblbg', 'transparent');
+    }
+    card.classList.toggle('done', !!step.done);
+    moveCardTo(step.stage, animate);
+
+    // label state machine highlight
+    const curIdx = step.label ? labelOrder.indexOf(step.label) : -1;
+    LABELS.forEach((l, idx) => {
+      const el = pillEls[l.id];
+      el.classList.toggle('active', l.id === step.label);
+      el.classList.toggle('passed', curIdx >= 0 && idx < curIdx);
+    });
+
+    // reviewers
+    setReviewers(step.rev);
+
+    // return arrow
+    loopPath.classList.toggle('hot', !!step.detour);
+    loopLabel.classList.toggle('hot', !!step.detour);
+
+    // caption
+    capText.innerHTML = step.cap;
+    capStep.textContent = `${i+1} / ${state.steps.length}`;
+    caption.style.setProperty('--capcol', `var(${stg.col})`);
+
+    // belt animation runs only while playing
+    belt.classList.toggle('run', state.playing);
+  }
+
+  function setReviewers(mode) {
+    rvClaude.className = 'rv';
+    rvCodex.className = 'rv';
+    rvClaude.textContent = 'Claude';
+    rvCodex.textContent = 'Codex';
+    if (mode === 'pending') {
+      rvClaude.classList.add('pending');
+      rvCodex.classList.add('pending');
+    } else if (mode === 'approve') {
+      rvClaude.classList.add('approve'); rvClaude.textContent = 'Claude ✓';
+      rvCodex.classList.add('approve');  rvCodex.textContent = 'Codex ✓';
+    } else if (mode === 'reject') {
+      rvClaude.classList.add('approve'); rvClaude.textContent = 'Claude ✓';
+      rvCodex.classList.add('reject');   rvCodex.textContent = 'Codex ✗';
+    }
+  }
+
+  // ---------- Advance / loop control ----------
+  function advance() {
+    if (state.i < state.steps.length - 1) {
+      state.i++;
+      applyStep(state.i, true);
+    } else {
+      // cycle complete -> next PR, alternate the detour path
+      state.pr++;
+      state.detour = !state.detour;
+      resetCycle(true);
+    }
+  }
+
+  function scheduleNext() {
+    clearTimeout(state.timer);
+    if (!state.playing) return;
+    const delay = parseInt(document.getElementById('speed').value, 10);
+    state.timer = setTimeout(() => { advance(); scheduleNext(); }, delay);
+  }
+
+  function setPlaying(p) {
+    state.playing = p;
+    playBtn.innerHTML = p ? '⏸ 일시정지' : '▶ 재생';
+    playBtn.classList.toggle('primary', !p);
+    belt.classList.toggle('run', p);
+    if (p) scheduleNext(); else clearTimeout(state.timer);
+  }
+
+  // ---------- Controls ----------
+  const playBtn = document.getElementById('playBtn');
+  playBtn.addEventListener('click', () => setPlaying(!state.playing));
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    setPlaying(false);
+    advance();
+  });
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    setPlaying(false);
+    state.pr = 41; state.detour = true;
+    resetCycle(true);
+  });
+  document.getElementById('speed').addEventListener('input', () => {
+    if (state.playing) scheduleNext();
+  });
+
+  // ---------- Init ----------
+  window.addEventListener('resize', layout);
+  resetCycle(true);
+  // ensure fonts/layout settled, then park card precisely
+  requestAnimationFrame(() => requestAnimationFrame(layout));
+</script>
+</body>
+</html>
