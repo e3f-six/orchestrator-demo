@@ -267,10 +267,10 @@
         <span class="kv">CI <i>→</i> 품질 게이트</span>
       </div>
       <p class="concept-agents">
-        에이전트(<code>claude</code> / <code>codex</code>)는 <b>헤드리스 모드</b>의 stateless 워커로,
-        격리된 <code>git worktree</code> 안에서 한 번에 하나의 작업만 수행합니다.
-        리뷰가 수렴하지 않으면 <b>중재자(Arbiter)</b>가 최종 결정(SHIP/REDO)을 내립니다 —
-        사람이 개입하는 막다른 길은 거의 없습니다(<code>agent:blocked</code>는 드문 최후수단).
+        에이전트(<code>claude</code> / <code>codex</code>)는 <b>헤드리스 모드</b>의 stateless 워커 —
+        격리된 <code>git worktree</code>에서 한 번에 하나의 작업만 수행합니다.<br>
+        리뷰가 막히면 <b style="color:var(--c-arbiter)">중재자(Arbiter)</b>가 최종 결정(SHIP / REDO)을 내려 막다른 길을 없앱니다
+        (<code>agent:blocked</code>만 드문 예외).
       </p>
     </div>
   </header>
@@ -317,9 +317,9 @@
       </div>
     </div>
     <div class="legend">
-      변경 요청이 나오면 카드가 <b>Babysitter</b>로 되돌아가 한 라운드 값싸게 수정한 뒤 리뷰로 복귀합니다
-      (<code>MAX_REVIEW_ROUNDS=2</code>). 그래도 수렴하지 않으면 <b>중재자(Arbiter)</b>가 교착을 끊고
-      최종 결정을 내립니다 — babysitter는 1차 저비용 경로, arbiter는 백스톱입니다.
+      변경 요청 → 카드가 <b>Babysitter</b>로 되돌아가 <b>최대 2라운드</b> 값싸게 수정한 뒤 리뷰로 복귀합니다 (<code>MAX_REVIEW_ROUNDS=3</code>).<br>
+      그래도 수렴하지 않으면 <b style="color:var(--c-arbiter)">중재자(Arbiter)</b>가 교착을 끊고 최종 결정을 내립니다.<br>
+      즉, <b>Babysitter</b>는 값싼 1차 경로(최대 2회) · <b style="color:var(--c-arbiter)">Arbiter</b>는 백스톱입니다.
     </div>
   </div>
 
@@ -354,10 +354,20 @@
 
   // ---------- Build the step script for one cycle ----------
   // outcome ∈ 'clean' | 'babysitter' | 'arbiter-ship' | 'arbiter-redo'
-  // Models MAX_REVIEW_ROUNDS=2: round-1 changes → one cheap Babysitter patch →
-  // round-2 review; if still unconverged the Arbiter backstops with SHIP/REDO.
+  // Models MAX_REVIEW_ROUNDS=3: a failing review triggers up to TWO cheap
+  // Babysitter patch rounds (re-review between each); if it still hasn't
+  // converged after the 3rd review, the Arbiter backstops with SHIP/REDO.
   function buildSteps(prNum, outcome) {
     const S = [];
+    const review = (round, tail) => S.push({ stage:'review', label:'review-needed', kind:'pr', rev:'pending',
+      cap:`PR이 리뷰 큐에 진입(라운드 ${round}/3). <b>Claude</b>·<b>Codex</b> 두 리뷰어가 <b>실제 체크아웃된 코드 + 테스트 결과</b>로 검토합니다.${tail || ''}` });
+    const babysit = (round) => {
+      S.push({ stage:'review', label:'changes-requested', kind:'pr', rev:'reject', detour:true,
+        cap:`<b>변경 요청 (${round}회차)!</b> 카드가 <b>Babysitter로 되돌아갑니다</b> — 값싸고 범위가 좁은 수정 경로.` });
+      S.push({ stage:'babysitter', label:'patching', kind:'pr', rev:null,
+        cap:`<b>Babysitter</b>가 <b>PR 브랜치만</b> 패치합니다 (${round}/2라운드). main은 절대 건드리지 않습니다.` });
+    };
+
     S.push({ stage:'design', label:null, kind:'doc', rev:null,
       cap:'설계 문서(OVERVIEW.md)가 컨베이어 벨트의 <b>원천</b>입니다 — 사람이 작성하는 단 하나의 진실. 외부 이슈는 <code>auto-intake</code>로 자동 편입됩니다.' });
     S.push({ stage:'planner', label:'ready', kind:'issue', rev:null,
@@ -366,28 +376,23 @@
       cap:'<b>Coder</b>가 이슈 하나를 잡아 <b>격리된 worktree</b>에서 구현·테스트합니다.' });
     S.push({ stage:'coder', label:'pr-open', kind:'pr', rev:null,
       cap:'테스트가 통과하면 <b>PR을 엽니다</b>. 한 이슈 → 하나의 작은 PR.' });
-    S.push({ stage:'review', label:'review-needed', kind:'pr', rev:'pending',
-      cap:'PR이 리뷰 큐에 진입(라운드 1). <b>Claude</b>·<b>Codex</b> 두 리뷰어가 <b>실제 체크아웃된 코드 + 테스트 결과</b>로 검토합니다.' });
+    review(1);
 
     if (outcome === 'clean') {
       S.push({ stage:'review', label:'approved', kind:'pr', rev:'approve',
         cap:'두 리뷰어 <b>승인</b> → <code>agent:approved</code>. 한 명이 기권(abstain)해도 나머지의 승인이면 충분 — 단, 무리뷰 머지는 없습니다.' });
     } else {
-      // round 1 → changes-requested → one cheap babysitter patch → round 2
-      S.push({ stage:'review', label:'changes-requested', kind:'pr', rev:'reject', detour:true,
-        cap:'<b>변경 요청!</b> 카드가 <b>Babysitter로 되돌아갑니다</b> — 값싸고 범위가 좁은 1차 수정 경로.' });
-      S.push({ stage:'babysitter', label:'patching', kind:'pr', rev:null,
-        cap:'<b>Babysitter</b>가 <b>PR 브랜치만</b> 패치합니다. main은 절대 건드리지 않습니다.' });
-      S.push({ stage:'review', label:'review-needed', kind:'pr', rev:'pending',
-        cap:'패치 완료 → 다시 <b>리뷰 큐</b>로(라운드 2 — <code>MAX_REVIEW_ROUNDS=2</code>).' });
+      // up to two cheap babysitter rounds (MAX_REVIEW_ROUNDS=3)
+      babysit(1); review(2);
+      babysit(2); review(3, ' (마지막 허용 라운드)');
 
       if (outcome === 'babysitter') {
         S.push({ stage:'review', label:'approved', kind:'pr', rev:'approve',
-          cap:'2라운드에서 <b>승인</b> → <code>agent:approved</code>. 값싼 babysitter 라운드로 수렴 — 무거운 Arbiter는 호출되지 않습니다.' });
+          cap:'3라운드에서 <b>승인</b> → <code>agent:approved</code>. babysitter <b>2회</b>의 값싼 수정으로 수렴 — 무거운 Arbiter는 호출되지 않습니다.' });
       } else {
-        // not converged after round 2 → hand to the Arbiter
+        // not converged after 2 babysitter rounds → hand to the Arbiter
         S.push({ stage:'review', label:'arbitration', kind:'pr', rev:'reject',
-          cap:'2라운드에도 미수렴 → PR을 <b>중재자(Arbiter)</b>에게 넘깁니다. <code>agent:arbitration</code>' });
+          cap:'babysitter <b>2라운드</b>에도 미수렴 → PR을 <b>중재자(Arbiter)</b>에게 넘깁니다. <code>agent:arbitration</code>' });
         S.push({ stage:'arbiter', label:'arbitration', kind:'pr', rev:null,
           cap:'<b>Arbiter</b>(최종 권한): base 머지·충돌 해결 후 <b>진짜 블로커만</b> 수정(니트픽 무시)하고 테스트를 green으로.' });
 
