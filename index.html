@@ -260,16 +260,19 @@
     <p class="tagline">자율 코딩 에이전트를 위한 GitHub 중심 컨베이어 벨트</p>
     <div class="concept">
       <div class="concept-map">
-        <b>GitHub = 영속 상태 머신</b>
-        <span class="kv">이슈 <i>→</i> 빌드 큐</span>
-        <span class="kv">PR <i>→</i> 리뷰 큐</span>
-        <span class="kv">라벨 <i>→</i> 상태</span>
-        <span class="kv">CI <i>→</i> 품질 게이트</span>
+        <b>GitHub = durable state machine</b>
+        <span class="kv">Issues <i>=</i> 작업 큐</span>
+        <span class="kv">PRs <i>=</i> 리뷰 큐</span>
+        <span class="kv">Labels <i>=</i> 현재 상태</span>
+        <span class="kv">CI <i>=</i> 품질 게이트</span>
       </div>
+      <p class="concept-agents">
+        별도 DB 없이 <b>GitHub 자체를 상태 저장소</b>로 씁니다 — 위 네 가지가 각각 그 역할을 맡습니다.
+      </p>
       <p class="concept-agents">
         에이전트(<code>claude</code> / <code>codex</code>)는 <b>헤드리스 모드</b>의 stateless 워커 —
         격리된 <code>git worktree</code>에서 한 번에 하나의 작업만 수행합니다.<br>
-        리뷰가 막히면 <b style="color:var(--c-arbiter)">중재자(Arbiter)</b>가 최종 결정(SHIP / REDO)을 내려 막다른 길을 없앱니다
+        두 리뷰어가 합의에 이르지 못하면 <b style="color:var(--c-arbiter)">중재자(Arbiter)</b>가 최종 결정(SHIP / REDO)을 내려 막다른 길을 없앱니다
         (<code>agent:blocked</code>만 드문 예외).
       </p>
     </div>
