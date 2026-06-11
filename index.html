@@ -363,7 +363,7 @@
       cap:`PR이 리뷰 큐에 진입(라운드 ${round}/3). <b>Claude</b>·<b>Codex</b> 두 리뷰어가 <b>실제 체크아웃된 코드 + 테스트 결과</b>로 검토합니다.${tail || ''}` });
     const babysit = (round) => {
       S.push({ stage:'review', label:'changes-requested', kind:'pr', rev:'reject', detour:true,
-        cap:`<b>변경 요청 (${round}회차)!</b> 카드가 <b>Babysitter로 되돌아갑니다</b> — 값싸고 범위가 좁은 수정 경로.` });
+        cap:`<b>변경 요청 (${round}회차)!</b> 카드가 <b>Babysitter로 되돌아갑니다</b> — 범위가 좁은 1차 패치 경로.` });
       S.push({ stage:'babysitter', label:'patching', kind:'pr', rev:null,
         cap:`<b>Babysitter</b>가 <b>PR 브랜치만</b> 패치합니다 (${round}/2라운드). main은 절대 건드리지 않습니다.` });
     };
@@ -388,7 +388,7 @@
 
       if (outcome === 'babysitter') {
         S.push({ stage:'review', label:'approved', kind:'pr', rev:'approve',
-          cap:'3라운드에서 <b>승인</b> → <code>agent:approved</code>. babysitter <b>2회</b>의 값싼 수정으로 수렴 — 무거운 Arbiter는 호출되지 않습니다.' });
+          cap:'3라운드에서 <b>승인</b> → <code>agent:approved</code>. babysitter <b>2회</b> 패치로 수렴 — Arbiter는 호출되지 않습니다.' });
       } else {
         // not converged after 2 babysitter rounds → hand to the Arbiter
         S.push({ stage:'review', label:'arbitration', kind:'pr', rev:'reject',
