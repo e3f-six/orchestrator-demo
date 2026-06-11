@@ -251,6 +251,86 @@
   .speed input { accent-color: #a371f7; }
   .legend { color: var(--muted); font-size: 12px; text-align: center; margin-top: 14px; }
   .legend b { color: var(--c-baby); }
+
+  /* ---------- Batch belt (bottom): planner-queue consumption ---------- */
+  .pipeline.batch { padding-top: 18px; }
+  .batchHead {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .batchTitle { font-size: 13px; font-weight: 650; color: var(--text); }
+  .batchTitle b { color: var(--c-planner); }
+  .batchTitle i { color: var(--muted); font-style: normal; font-weight: 400; }
+  .batchHud { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+  .hud {
+    font-size: 11px; padding: 3px 9px; border-radius: 20px;
+    border: 1px solid var(--border); color: var(--muted);
+    background: rgba(255,255,255,0.03); white-space: nowrap;
+  }
+  .hud b { font-weight: 800; margin-left: 4px; }
+  .hud.waiting { border-color: var(--c-planner); color: var(--c-planner); }
+  .hud.inflight { border-color: var(--c-coder); color: var(--c-coder); }
+  .hud.done { border-color: var(--c-merge); color: var(--c-merge); }
+  .hud.blocked { border-color: var(--reject); color: var(--reject); }
+  .hud.conc { border-style: dashed; color: var(--muted); }
+
+  .batchBelt {
+    position: relative; height: 104px; border-radius: 12px;
+    border: 1px solid var(--border); overflow: hidden;
+    background: var(--bg2);
+  }
+  .bzone {
+    position: absolute; top: 0; bottom: 0;
+    display: flex; flex-direction: column; align-items: center;
+    padding-top: 7px; text-align: center;
+    font-size: 10px; color: var(--muted); pointer-events: none;
+  }
+  .bzone .zlab { font-weight: 700; letter-spacing: .2px; }
+  .bzone .zsub { font-size: 9px; opacity: .8; margin-top: 1px; }
+  .bzone i { font-style: normal; color: #b9a6e6; }
+  .bzone.zwait { border-right: 1px dashed var(--border); }
+  .bzone.zflight { border-right: 1px dashed var(--border); background: rgba(57,197,207,0.05); }
+  .bzone.zwait.reseed { animation: reseedpulse .9s ease 2; }
+  @keyframes reseedpulse { 0%,100%{background:transparent} 50%{background:rgba(163,113,247,0.18)} }
+
+  .batchConveyor {
+    position: absolute; left: 0; right: 0; bottom: 14px; height: 8px;
+    background: repeating-linear-gradient(90deg,
+      var(--belt) 0, var(--belt) 14px, #2b3340 14px, #2b3340 17px);
+    background-size: 31px 100%; opacity: .45;
+  }
+  .batchConveyor.run { animation: beltmove2 1.4s linear infinite; }
+  @keyframes beltmove2 { to { background-position: 31px 0; } }
+
+  .chip {
+    position: absolute; top: 44px;
+    min-width: 40px; text-align: center;
+    font-size: 11px; font-weight: 700;
+    padding: 4px 8px; border-radius: 8px;
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, #1f2630, #161b22);
+    color: var(--muted);
+    box-shadow: 0 4px 10px -6px rgba(0,0,0,.8);
+    transition: left .6s cubic-bezier(.65,.05,.36,1), top .35s, border-color .3s, color .3s, box-shadow .3s;
+    z-index: 3; white-space: nowrap;
+  }
+  .chip .chmark { margin-left: 3px; }
+  .chip.waiting { border-color: var(--c-planner); color: #c9b6f5; }
+  .chip.inflight {
+    top: 40px;
+    border-color: var(--chipcol, var(--c-coder)); color: var(--text);
+    box-shadow: 0 0 0 1px var(--chipcol, var(--c-coder)), 0 0 18px -4px var(--chipcol, var(--c-coder));
+    z-index: 6;
+  }
+  .chip.done { border-color: var(--c-merge); color: var(--c-merge); background: rgba(63,185,80,0.10); }
+  .chip.blocked { border-color: var(--reject); color: var(--reject); background: rgba(248,81,73,0.12); }
+
+  .batchNote { color: var(--muted); font-size: 12px; text-align: center; margin-top: 12px; }
+  .batchNote b { color: var(--c-coder); }
+  .batchNote code {
+    color: #d2a8ff; background: rgba(110,118,129,0.15);
+    padding: 1px 5px; border-radius: 5px; font-size: 11px;
+  }
 </style>
 </head>
 <body>
@@ -294,6 +374,41 @@
           <div class="ctitle"><span class="cdot"></span><span id="cardTitle">대기 중</span></div>
           <div class="clabel" id="cardLabel">—</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Batch belt: how the Planner queue of 10 issues is consumed -->
+    <div class="pipeline batch">
+      <div class="batchHead">
+        <div class="batchTitle">
+          배치 뷰 — <b>Planner 큐(이슈 10개)</b>를 벨트가 어떻게 소비하는가
+          <i>· 위 벨트 = 이슈 1개의 상세 여정 / 아래 = 큐 전체</i>
+        </div>
+        <div class="batchHud">
+          <span class="hud waiting">대기<b id="hWait">10</b></span>
+          <span class="hud inflight">처리 중<b id="hFlight">0</b></span>
+          <span class="hud done">완료<b id="hDone">0</b></span>
+          <span class="hud blocked">막힘<b id="hBlock">0</b></span>
+          <span class="hud conc">동시성 = 1 · coder = 최하위 우선순위</span>
+        </div>
+      </div>
+      <div class="batchBelt" id="batchBelt">
+        <div class="bzone zwait" id="zWait">
+          <span class="zlab">대기 큐</span><span class="zsub"><i>agent:ready</i> · FIFO</span>
+        </div>
+        <div class="bzone zflight" id="zFlight">
+          <span class="zlab">처리 중 (1)</span><span class="zsub">coder → review → merge</span>
+        </div>
+        <div class="bzone zdone" id="zDone">
+          <span class="zlab">완료 / 막힘</span><span class="zsub"><i>agent:done</i> · <i>blocked</i></span>
+        </div>
+        <div class="batchConveyor" id="batchConveyor"></div>
+        <!-- chips injected by script -->
+      </div>
+      <div class="batchNote">
+        단일 레인: 코더는 <b>최하위 우선순위</b>라, 하나의 PR이 머지(또는 <code>agent:blocked</code>)될
+        때까지 다음 <code>agent:ready</code> 이슈를 집지 않습니다 — 큐는 한 번에 하나씩 빠집니다.
+        동시성은 옵트인(워크트리 다중화).
       </div>
     </div>
 
@@ -456,6 +571,96 @@
     pillEls[l.id] = p;
   });
 
+  // ---------- Batch belt (bottom): the planner queue of 10 issues ----------
+  // The orchestrator is single-lane: one_pass() runs ONE worker per pass and the
+  // coder (which picks up a fresh agent:ready issue) is the LOWEST priority, so a
+  // PR is pulled all the way to merge/blocked before the next ready issue starts.
+  // This belt shows that: 10 issue chips, exactly one in-flight, queue draining 10→0.
+  const BATCH_SIZE = 10;
+  const batchBelt = document.getElementById('batchBelt');
+  const batchConveyor = document.getElementById('batchConveyor');
+  const zWaitEl = document.getElementById('zWait');
+  const zFlightEl = document.getElementById('zFlight');
+  const zDoneEl = document.getElementById('zDone');
+  const hWait = document.getElementById('hWait');
+  const hFlight = document.getElementById('hFlight');
+  const hDone = document.getElementById('hDone');
+  const hBlock = document.getElementById('hBlock');
+
+  // zone bounds as fractions of belt width: [start, end]
+  const Z = { wait: [0.02, 0.40], flight: [0.45, 0.70], done: [0.72, 0.985] };
+
+  function layoutZones() {
+    const setBand = (el, a, b) => {
+      el.style.left = (a * 100) + '%';
+      el.style.width = ((b - a) * 100) + '%';
+    };
+    setBand(zWaitEl, 0, Z.wait[1]);
+    setBand(zFlightEl, Z.wait[1], Z.done[0]);
+    setBand(zDoneEl, Z.done[0], 1);
+  }
+
+  const chipEls = [];
+  for (let s = 0; s < BATCH_SIZE; s++) {
+    const c = document.createElement('div');
+    c.className = 'chip waiting';
+    c.innerHTML = `<span class="chnum"></span><span class="chmark"></span>`;
+    batchBelt.appendChild(c);
+    chipEls.push(c);
+  }
+
+  // Place chips by their state. idx = the in-flight slot (= state.pr - batchBase);
+  // slots < idx are finished (done/blocked), slot idx is in-flight, slots > idx wait.
+  function renderBatch() {
+    const w = batchBelt.clientWidth || batchBelt.getBoundingClientRect().width;
+    if (!w) return;
+    const base = state.batchBase;
+    // pristine poster (before Play / after Reset): the full queue of 10 sits in
+    // the planner stage, nothing picked up yet. idx=-1 => every slot is waiting.
+    const pristine = state.cycle === 0 && state.i === 0 && state.batchResults.length === 0;
+    const idx = pristine ? -1 : (state.pr - base);
+    const results = state.batchResults;           // length === idx
+    const step = state.steps[state.i];
+    const stageFrac = step ? (stageIndex[step.stage] / (STAGES.length - 1)) : 0;
+
+    let doneN = 0, blockN = 0;
+    for (let s = 0; s < BATCH_SIZE; s++) {
+      const chip = chipEls[s];
+      chip.querySelector('.chnum').textContent = '#' + (base + s);
+      const mark = chip.querySelector('.chmark');
+      let frac, cls, markTxt = '';
+
+      if (s < idx) {                               // finished
+        const r = results[s] || 'done';
+        cls = r;
+        markTxt = r === 'blocked' ? ' ⛔' : ' ✓';
+        if (r === 'blocked') blockN++; else doneN++;
+        frac = Z.done[0] + 0.02 + s * 0.026;
+      } else if (s === idx) {                      // in-flight (the one the top belt animates)
+        cls = 'inflight';
+        frac = Z.flight[0] + stageFrac * (Z.flight[1] - Z.flight[0]);
+        const stg = STAGES[stageIndex[step ? step.stage : 'coder']] || STAGES[2];
+        chip.style.setProperty('--chipcol', `var(${stg.col})`);
+      } else {                                     // waiting (front of queue nearest flight zone)
+        cls = 'waiting';
+        const rank = s - (idx + 1);                // 0 = next up
+        frac = Math.max(0.02, Z.wait[1] - 0.03 - rank * 0.035);
+      }
+
+      chip.className = 'chip ' + cls;
+      mark.textContent = markTxt;
+      chip.style.left = (frac * w - (chip.offsetWidth || 46) / 2) + 'px';
+    }
+
+    hWait.textContent = pristine ? BATCH_SIZE : Math.max(0, (BATCH_SIZE - 1) - idx);
+    hFlight.textContent = pristine ? 0 : 1;
+    hDone.textContent = doneN;
+    hBlock.textContent = blockN;
+
+    zWaitEl.classList.toggle('reseed', !!state.justReseeded);
+    batchConveyor.classList.toggle('run', state.playing);
+  }
+
   // ---------- Element refs ----------
   const card = document.getElementById('card');
   const cardTitle = document.getElementById('cardTitle');
@@ -492,6 +697,9 @@
     loopPath.setAttribute('d', `M ${x1} ${yTop} C ${x1} ${arc}, ${x2} ${arc}, ${x2} ${yTop}`);
     loopLabel.setAttribute('x', (x1 + x2) / 2);
     loopLabel.setAttribute('y', arc - 6);
+    // bottom batch belt: zone bands + chip positions are width-relative
+    layoutZones();
+    renderBatch();
   }
   function moveCardTo(stageId, animate) {
     if (!animate) {
@@ -508,7 +716,11 @@
   // ---------- Animation state ----------
   // Cycle through outcomes so every path (incl. Arbiter SHIP/REDO→blocked) shows.
   const OUTCOMES = ['clean', 'babysitter', 'arbiter-ship', 'babysitter', 'arbiter-redo'];
-  const state = { steps: [], i: 0, playing: false, timer: null, pr: 41, cycle: 0 };
+  const state = {
+    steps: [], i: 0, playing: false, timer: null, pr: 41, cycle: 0,
+    // batch belt: a planner-seeded queue of BATCH_SIZE issues, drained one at a time
+    batchBase: 41, batchResults: [], justReseeded: false,
+  };
 
   function resetCycle(rebuild) {
     if (rebuild) {
@@ -568,6 +780,9 @@
 
     // belt animation runs only while playing
     belt.classList.toggle('run', state.playing);
+
+    // bottom batch belt stays in lockstep with the in-flight issue
+    renderBatch();
   }
 
   function setReviewers(mode) {
@@ -593,9 +808,20 @@
       state.i++;
       applyStep(state.i, true);
     } else {
-      // cycle complete -> next PR, rotate to the next outcome
+      // cycle complete -> record this issue's batch result, then start the next.
+      // The just-finished issue used OUTCOMES[state.cycle]; arbiter-redo ends at
+      // agent:blocked (a human terminal), everything else reaches agent:done.
+      state.justReseeded = false;
+      const outcome = OUTCOMES[state.cycle % OUTCOMES.length];
+      state.batchResults.push(outcome === 'arbiter-redo' ? 'blocked' : 'done');
       state.pr++;
       state.cycle++;
+      if (state.batchResults.length >= BATCH_SIZE) {
+        // batch drained -> the Planner re-seeds the next 10 ready issues
+        state.batchBase = state.pr;
+        state.batchResults = [];
+        state.justReseeded = true;
+      }
       resetCycle(true);
     }
   }
@@ -625,6 +851,7 @@
   document.getElementById('resetBtn').addEventListener('click', () => {
     setPlaying(false);
     state.pr = 41; state.cycle = 0;
+    state.batchBase = 41; state.batchResults = []; state.justReseeded = false;
     resetCycle(true);
   });
   document.getElementById('speed').addEventListener('input', () => {
